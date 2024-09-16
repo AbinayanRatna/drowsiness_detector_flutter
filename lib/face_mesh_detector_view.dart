@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 
 import 'detector_view.dart';
@@ -19,6 +20,7 @@ class _FaceMeshDetectorViewState extends State<FaceMeshDetectorView> {
   bool _isBusy = false;
   CustomPaint? _customPaint;
   String? _text;
+  int _timeEyeLidsClosed = 0;
   var _cameraLensDirection = CameraLensDirection.front;
 
   @override
@@ -57,14 +59,25 @@ class _FaceMeshDetectorViewState extends State<FaceMeshDetectorView> {
     setState(() {
       _text = '';
     });
+
     final meshes = await _meshDetector.processImage(inputImage);
     if (inputImage.metadata?.size != null &&
         inputImage.metadata?.rotation != null) {
       final painter = FaceMeshDetectorPainter(
-        meshes,
-        inputImage.metadata!.size,
-        inputImage.metadata!.rotation,
-        _cameraLensDirection,
+        meshes: meshes,
+        imageSize: inputImage.metadata!.size,
+        rotation: inputImage.metadata!.rotation,
+        cameraLensDirection: _cameraLensDirection,
+        timeEyeLidsClosed: _timeEyeLidsClosed,
+        onUpdateTimeClosed: (int updatedTime) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _timeEyeLidsClosed = updatedTime;
+              });
+            }
+          });
+        },
       );
       _customPaint = CustomPaint(painter: painter);
     } else {
@@ -73,7 +86,6 @@ class _FaceMeshDetectorViewState extends State<FaceMeshDetectorView> {
         text += 'face: ${mesh.boundingBox}\n\n';
       }
       _text = text;
-      // TODO: set _customPaint to draw boundingRect on top of image
       _customPaint = null;
     }
     _isBusy = false;
